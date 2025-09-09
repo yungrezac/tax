@@ -1,0 +1,49 @@
+// Новый hook: useConvexRides
+import { useEffect, useState } from "react";
+import { useQuery, useMutation } from "convex/react";
+// authShim uses CommonJS exports; require it to get functions reliably
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { useAuthStateShim } = require('../lib/authShim');
+
+// Типы данных, соответствующие Convex schema
+type ConvexRide = {
+  _id: string;
+  from: string;
+  to: string;
+  paymentMethod: 'cash' | 'card';
+  status: string;
+  distance?: string | null;
+  driverId?: string | null;
+  _creationTime: number;
+};
+
+export default function useConvexRides() {
+  const listRequested = useQuery('rides.listRidesByStatus', { status: 'requested' });
+  const createRideMutation = useMutation('rides.createRide');
+  const acceptRideMutation = useMutation('rides.acceptRide');
+  const { user } = useAuthStateShim();
+
+  const createRide = async (payload: { from: string; to: string; paymentMethod: 'cash' | 'card'; distance?: string }) => {
+    const created = await createRideMutation(payload);
+    return created;
+  };
+
+  const acceptRide = async (rideId: string) => {
+    // If user is not authenticated, the server will throw. We can optionally check here.
+    if (!user) {
+      throw new Error('Not authenticated');
+    }
+    const res = await acceptRideMutation({ rideId });
+    return res;
+  };
+
+  return { listRequested, createRide, acceptRide, currentUser: user };
+}
+
+// Хук для подписки на конкретный заказ в реальном времени.
+// Используйте внутри компонентов: const ride = useRide(rideId);
+export function useRide(rideId: string) {
+  // Важно: вызывайте useRide только если rideId определён (в компоненте проверяйте id)
+  const ride = useQuery('rides.getRide', { rideId });
+  return ride as ConvexRide | null;
+}
